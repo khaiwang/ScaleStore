@@ -8,12 +8,12 @@
 namespace scalestore {
 namespace storage {
 Buffermanager::Buffermanager(rdma::CM<rdma::InitMessage>& cm, NodeID nodeId, s32 ssd_fd)
-    : dramPoolSize(FLAGS_dramGB * 1024 * 1024 * 1024),
-      dramPoolNumberPages(dramPoolSize / sizeof(Page)),
-      ssdSlotsSize(((FLAGS_ssd_gib * 1024 * 1024 * 1024) / sizeof(Page))),
-      bufferFrames(Helper::nextPowerTwo(dramPoolNumberPages) * 4),
+    : dramPoolSize(FLAGS_dramGB * 1024 * 1024 * 1024), // memory used for buffer pool? (not page itself)
+      dramPoolNumberPages(dramPoolSize / sizeof(Page)), // can store NumberPages of structure page
+      ssdSlotsSize(((FLAGS_ssd_gib * 1024 * 1024 * 1024) / sizeof(Page))), // directory
+      bufferFrames(Helper::nextPowerTwo(dramPoolNumberPages) * 4), // DOUBT: why *4
       bfs((bufferFrames) * sizeof(BufferFrame)),
-      pTable(dramPoolNumberPages,bfs),
+      pTable(dramPoolNumberPages, bfs),
       nodeId(nodeId),
       ssd_fd(ssd_fd),
       frameFreeList(bufferFrames),
