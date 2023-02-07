@@ -11,7 +11,7 @@ class Parallelize{
   public:
    template<typename F>
    static void parallelRange(uint64_t n, F function){
-      parallelRange(std::thread::hardware_concurrency(), n,function);
+      parallelRange(std::thread::hardware_concurrency()/*the number of threads*/, n, function);
    }
 
    template<typename F>

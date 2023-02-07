@@ -59,8 +59,8 @@ struct MessageHandler {
       InvalidationBatch* passiveInvalidationBatch = nullptr;  // passive will be deleted with next signaled completion
       uint64_t retries = 0;
       // remote mailboxes for each remote MH in order to allow MH to delegate requests
-      std::vector<uintptr_t> remoteMbOffsets;
-      std::vector<uintptr_t> remotePlOffsets;
+      std::vector<uintptr_t> remoteMbOffsets;   // mailbox
+      std::vector<uintptr_t> remotePlOffsets;   // payload
    };
    // -------------------------------------------------------------------------------------
    // Mailbox partition per thread
@@ -130,6 +130,7 @@ struct MessageHandler {
          return;
       }
 
+      // similar to page fault processing?
       if(guard.state == STATE::SSD){
          // -------------------------------------------------------------------------------------
          ensure(guard.frame->latch.isLatched());
@@ -208,6 +209,7 @@ struct MessageHandler {
                ensure(!guard.frame->isPossessor(nodeId));
                // -------------------------------------------------------------------------------------
                response.resultType = RESULT::NoPageEvicted;
+               // need to fetch the page from other sharers
                response.conflictingNodeId = guard.frame->possessors.shared;  // not really conflicting here
                response.pVersion = guard.frame->pVersion;
                writeMsg(clientId, response, page_handle);

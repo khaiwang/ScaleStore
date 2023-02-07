@@ -127,7 +127,9 @@ struct BatchQueue {
    const size_t size;
    std::unique_ptr<B[]> batches;
    SpinLock latch;
-   Metadata full;
+   // Q: What's the meaning of empty and full?
+   // A: full means full batch stack, empty means empty batch stack
+   Metadata full; 
    Metadata empty;
    // -------------------------------------------------------------------------------------
    BatchQueue(size_t size_) : size((size_ / BatchSize) * oversubscription), batches(std::make_unique<B[]>(size))

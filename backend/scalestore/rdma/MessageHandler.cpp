@@ -176,11 +176,13 @@ void MessageHandler::startThread() {
                }
 
                switch (ctx.request->type) {
-                  case MESSAGE_TYPE::Finish: {
+                  case MESSAGE_TYPE::Finish: { 
+                     // the endpoint is finished and we close the connection
                      connectedClients--;
                      break;
                   }
-                  case MESSAGE_TYPE::DR: {
+                  case MESSAGE_TYPE::DR: { 
+                     // delegation request
                      auto& request = *reinterpret_cast<DelegationRequest*>(ctx.request);
                      ctx.remoteMbOffsets[request.bmId] = request.mbOffset;
                      ctx.remotePlOffsets[request.bmId] = request.mbPayload;
@@ -258,6 +260,7 @@ void MessageHandler::startThread() {
                      // -------------------------------------------------------------------------------------
                      // found entry but could not latch check max restart
                      if (guard.state == STATE::RETRY) {
+                        // if the pVersion changed, copy request will fail and send request to the latest owner
                         if (guard.frame->pVersion == request.pVersion && ctx.retries < FLAGS_messageHandlerMaxRetries) { // is this abort needed? to check if mh_waiting? 
                            ctx.retries++;
                            mailboxes[mailboxIdx] = 1;
@@ -272,6 +275,7 @@ void MessageHandler::startThread() {
                      }
                      // -------------------------------------------------------------------------------------
                      // potential deadlock, restart and release latches
+                     // the deadlock case in paper
                      if (guard.frame->mhWaiting && guard.frame->state != BF_STATE::HOT) {
                         ensure((guard.frame->state == BF_STATE::IO_RDMA) | (guard.frame->state == BF_STATE::FREE));
                         response.resultType = RESULT::CopyFailedWithRestart;

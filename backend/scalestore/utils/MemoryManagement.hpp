@@ -24,6 +24,7 @@ class HugePages
   public:
    HugePages(size_t size) : size(size)
    {
+      // here it uses mmap to create (big page) space for buffer frames
       void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
       if (p == MAP_FAILED)
          throw std::runtime_error("mallocHugePages failed");

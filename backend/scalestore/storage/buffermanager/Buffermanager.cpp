@@ -11,19 +11,19 @@ Buffermanager::Buffermanager(rdma::CM<rdma::InitMessage>& cm, NodeID nodeId, s32
     : dramPoolSize(FLAGS_dramGB * 1024 * 1024 * 1024), // memory used for buffer pool? (not page itself)
       dramPoolNumberPages(dramPoolSize / sizeof(Page)), // can store NumberPages of structure page
       ssdSlotsSize(((FLAGS_ssd_gib * 1024 * 1024 * 1024) / sizeof(Page))), // directory
-      bufferFrames(Helper::nextPowerTwo(dramPoolNumberPages) * 4), // DOUBT: why *4
+      bufferFrames(Helper::nextPowerTwo(dramPoolNumberPages) * 4), // Q: why *4
       bfs((bufferFrames) * sizeof(BufferFrame)),
-      pTable(dramPoolNumberPages, bfs),
+      pTable(dramPoolNumberPages, bfs), // number of buckets (next power of 2)
       nodeId(nodeId),
       ssd_fd(ssd_fd),
-      frameFreeList(bufferFrames),
+      frameFreeList(bufferFrames), // partitioned queue, more concurrency
       pageFreeList(dramPoolNumberPages),
       pidFreeList(ssdSlotsSize) {
    // initialize hugepages bufferframes
    // all including ht bufferframes 
    for (uint64_t bf_i = 0; bf_i < (bufferFrames); bf_i++) {
       new (&bfs[bf_i]) BufferFrame();
-      if(bf_i < pTable.size)
+      if(bf_i < pTable.size) // inlined bf 
          bfs[bf_i].isHtBucket = true;
    }
 
@@ -31,25 +31,30 @@ Buffermanager::Buffermanager(rdma::CM<rdma::InitMessage>& cm, NodeID nodeId, s32
    const uint64_t page_per_partition = dramPoolNumberPages / FLAGS_page_pool_partitions;
    uint64_t pages_allocated = 0;
    for(uint64_t pp_i = 0; pp_i < FLAGS_page_pool_partitions; pp_i++){
-      auto allocate_pages = (pp_i < (FLAGS_page_pool_partitions -1)) ?page_per_partition : (dramPoolNumberPages - pages_allocated);
+      auto allocate_pages = (pp_i < (FLAGS_page_pool_partitions -1)) ? page_per_partition : (dramPoolNumberPages - pages_allocated);
       pages_allocated += allocate_pages;
-      auto page_ptr = static_cast<Page*>(cm.getGlobalBuffer().allocate(allocate_pages * sizeof(Page),512));
+      auto page_ptr = static_cast<Page*>(cm.getGlobalBuffer().allocate(allocate_pages * sizeof(Page), 512));
       ensure((((uintptr_t)page_ptr) % 512) == 0); // ensure alignment for page
-      dramPagePool.push_back({allocate_pages,page_ptr});
+      dramPagePool.push_back({allocate_pages, page_ptr});
+      // Q: What's the meaning of shift
       [[maybe_unused]] auto shift = cm.getGlobalBuffer().allocate(512); // shift 512 byte to increase cache associativity
    }
    ensure(pages_allocated == dramPoolNumberPages);
 
+   // Q: What's the benefit of this scheme
+   // A: Allocating pages in batch
    std::vector<Page*> pages;
    pages.reserve(dramPoolNumberPages);
+   // put all tables into the pages vector
    for(auto& p : dramPagePool){
       for(uint64_t p_i =0; p_i < p.first; p_i++){
          pages.push_back(&p.second[p_i]);
       }
    }
    std::random_device rd;
-   std::mt19937 g(rd());
-   std::shuffle(pages.begin(), pages.end(), g);
+   // a random number generator
+   std::mt19937 g(rd()); 
+   std::shuffle(pages.begin(), pages.end(), g); 
    // -------------------------------------------------------------------------------------
    // Free Lists
    // -------------------------------------------------------------------------------------
@@ -175,6 +180,7 @@ void Buffermanager::reclaimPage(BufferFrame& frame) {
    }
 }
 // -------------------------------------------------------------------------------------
+// write back all local pages into local ssd
 void Buffermanager::writeAllPages() {
    utils::Parallelize::parallelRange(10, bufferFrames, [&](uint64_t bf_b, uint64_t bf_e) {
       std::vector<uint64_t> retry_idx;

@@ -50,6 +50,7 @@ struct PartitionedQueue {
    }
    // -------------------------------------------------------------------------------------
    bool try_push(const T& e, BatchHandle& b_handle) {
+      // if there's no batch, set one
       if (b_handle.batch == nullptr) {
          auto p_id = utils::RandomGenerator::getRandU64Fast() & (Partitions - 1);
          auto rc = queues[p_id]->try_pop_empty(b_handle.batch);
@@ -61,16 +62,20 @@ struct PartitionedQueue {
          }
       }
       // -------------------------------------------------------------------------------------
+      // try to directly push e into the batch
       if (b_handle.batch->container.try_push(e)) [[likely]] return true;
       // -------------------------------------------------------------------------------------
+      // direcyly push failed, the batch is full
       b_handle.queue->push_full(b_handle.batch);  // cannot fail
       // -------------------------------------------------------------------------------------
       // get empty batch
+      // first randomly find
       auto p_id = utils::RandomGenerator::getRandU64Fast() & (Partitions - 1);
       auto rc = queues[p_id]->try_pop_empty(b_handle.batch);
       b_handle.queue = queues[p_id].get();
       if (rc) return b_handle.batch->container.try_push(e);
       // -------------------------------------------------------------------------------------
+      // traverse the batch queues to find an emty batch
       for (auto& q_ptr : queues) {
          if (q_ptr->try_pop_empty(b_handle.batch)) {
             b_handle.queue = q_ptr.get();

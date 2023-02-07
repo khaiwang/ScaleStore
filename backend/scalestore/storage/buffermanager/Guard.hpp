@@ -3,7 +3,8 @@
 
 namespace scalestore {
 namespace storage {
-
+   
+// Q: the meaning of these states
 enum class STATE : uint8_t{
    UNINITIALIZED, SSD, REMOTE, LOCAL_POSSESSION_CHANGE, REMOTE_POSSESSION_CHANGE, RETRY, INITIALIZED, MOVED, NOT_FOUND,
 };

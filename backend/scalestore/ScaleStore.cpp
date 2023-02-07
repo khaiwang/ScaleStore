@@ -40,9 +40,10 @@ ScaleStore::ScaleStore(){
    // -------------------------------------------------------------------------------------
    // order of construction is important
    cm = std::make_unique<rdma::CM<rdma::InitMessage>>();
+   // nodeID is the id of myself in the node list
    bm = std::make_unique<storage::Buffermanager>(*cm, nodeId, ssd_fd);
    storage::BM::global = bm.get();
-   mh = std::make_unique<rdma::MessageHandler>(*cm, *bm, nodeId);
+   mh = std::make_unique<rdma::MessageHandler>(*cm, *bm, nodeId); 
    workerPool = std::make_unique<threads::WorkerPool>(*cm, nodeId);
    pp = std::make_unique<storage::PageProvider>(*cm, *bm, mh->mbPartitions, ssd_fd);
    rGuard =std::make_unique<RemoteGuard>(mh->connectedClients); 

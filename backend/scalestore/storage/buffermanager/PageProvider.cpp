@@ -237,6 +237,7 @@ void PageProvider::startThread() {
                      frame.latch.unlatchExclusive();
                      return false;
                   }
+                  // if conflicts occur during downgrading, also means eviction (transfer ownership)
                   if (!frame.latch.tryDowngradeExclusiveToShared()) return true;
                   ensure(!frame.latch.isLatched());
                   async_write_buffer.add(frame, frame.pid, epoch);
@@ -244,6 +245,7 @@ void PageProvider::startThread() {
                }
                // -------------------------------------------------------------------------------------
                // Not dirty; But we own the page X therefore the PP evicted this page to clean the dirty flag
+               // Q: check the process of transfering page, will it affect the dirty bit?
                if ((frame.state == BF_STATE::HOT) && (frame.possession == POSSESSION::EXCLUSIVE) && ((frame.isPossessor(bm.nodeId)))) {
                   bm.removeFrame(frame, [&](BufferFrame& frame) {
                      if (!privatePageBuffer.full()) {
@@ -264,6 +266,7 @@ void PageProvider::startThread() {
             if ((frame.state == BF_STATE::HOT) && (frame.possession == POSSESSION::SHARED) &&
                 ((frame.isPossessor(bm.nodeId)) && (frame.possessors.shared.count() == 1))) {
                auto rand_evict = utils::RandomGenerator::getRandU64(0, 1000);  // second chance like
+               // Q: where is the logic of evicting to ssd?
                if (FLAGS_evict_to_ssd && rand_evict <= FLAGS_prob_SSD) {
                   bm.removeFrame(frame, [&](BufferFrame& frame) {
                      if (!privatePageBuffer.full()) {
