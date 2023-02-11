@@ -136,8 +136,8 @@ struct MessageHandler {
          ensure(guard.frame->latch.isLatched());
          ensure(guard.frame->page != nullptr);
          if(async_read_buffer.full()){
-               throw std::runtime_error("read buffer is full ");
-            }
+            throw std::runtime_error("read buffer is full ");
+         }
          
          guard.frame->state = BF_STATE::HOT;
          guard.frame->epoch = bm.globalEpoch.load();
@@ -148,7 +148,8 @@ struct MessageHandler {
          counters.incr(profiling::WorkerCounters::mh_msgs_restarted);
          return;         
       }
-         
+      
+      // Q: when we set this state
       if (guard.frame->state == BF_STATE::INVALIDATION_EXPECTED) {
          guard.frame->latch.unlatchExclusive();
          mailboxes[m_i] = 1;
@@ -218,6 +219,7 @@ struct MessageHandler {
                // -------------------------------------------------------------------------------------
                // acquire latch
                {
+                  // Q: why we add inflightCR here
                   std::unique_lock<std::mutex> ulquard(partition.inflightCRMutex);
                   partition.inflightCRs[m_i].inflight = true;
                   partition.inflightCRs[m_i].pid = guard.frame->pid;

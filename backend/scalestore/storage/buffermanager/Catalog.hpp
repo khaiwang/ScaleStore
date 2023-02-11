@@ -33,7 +33,7 @@ struct CatalogPage{
 struct Catalog{
 
    void init(NodeID nodeId){
-         if (nodeId == CATALOG_OWNER) { // implicit dependency to BM as catalog page need to exist
+      if (nodeId == CATALOG_OWNER) { // implicit dependency to BM as catalog page need to exist
          ExclusiveBFGuard guard(CATALOG_PID); 
          auto& catalogPage = guard.getFrame().page->getTuple<CatalogPage>(0);
          catalogPage.isInitialized = true;

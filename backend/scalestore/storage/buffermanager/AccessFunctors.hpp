@@ -21,8 +21,8 @@ struct Exclusive {
       // -------------------------------------------------------------------------------------
       if (g.frame->possession != POSSESSION::EXCLUSIVE || !(g.frame->isPossessor(nodeId))) {
          g.state = (g.frame->pid.getOwner() == nodeId) ? STATE::LOCAL_POSSESSION_CHANGE : STATE::REMOTE_POSSESSION_CHANGE;
-      } else
-         // Q: what's the purpose of this initialized state
+      } else // Exclusive && frame is possessed by requestor            Q(Done): What does the case represents for?
+         // Q(Done): what's the purpose of this initialized state
          g.state = STATE::INITIALIZED;
       // -------------------------------------------------------------------------------------
       // Exclusive

@@ -26,6 +26,7 @@ PageProvider::PageProvider(CM<rdma::InitMessage>& cm,
       const uint64_t blockSize = n / FLAGS_pageProviderThreads;
       ensure(blockSize > 0);
       for (uint64_t t_i = 0; t_i < FLAGS_pageProviderThreads; t_i++) {
+         // Q: how to maintain the partition-pid mapping
          auto begin = t_i * blockSize;
          auto end = begin + blockSize;
          if (t_i == FLAGS_pageProviderThreads - 1) end = n;
@@ -335,6 +336,7 @@ void PageProvider::startThread() {
                       ensure(frame.state != BF_STATE::EVICTED);
                       ensure(frame.pid.getOwner() == bm.nodeId);
                       // -------------------------------------------------------------------------------------
+                      // Q: why it removes the dirty flag? (cannot be submitted, reason?)
                       auto rc = evict_owner_page(frame, epoch_added);
                       ensure(rc);
 
@@ -357,6 +359,7 @@ void PageProvider::startThread() {
                // incoming requests
                if (mailboxes[m_i] == 0) continue;
                // -------------------------------------------------------------------------------------
+               // Q: What’s the receiving procedure of incoming (eviction requests)
                auto& request = partition.incoming[m_i];
                if (privatePageBuffer.getSize() < request.elements) {
                   // std::cerr << "\n";
@@ -376,12 +379,13 @@ void PageProvider::startThread() {
                for (uint64_t ee_i = 0; ee_i < request.elements; ee_i++) {
                   auto& ee = request.entries[ee_i];
                   auto guard = bm.findFrame<CONTENTION_METHOD::NON_BLOCKING>(ee.pid, Exclusive(), request.bmId);
+                  // Q: will continue affect the results? skip some elements? where to restart
                   if (guard.state == STATE::RETRY || guard.state == STATE::UNINITIALIZED) continue;
                   ensure(guard.state != STATE::NOT_FOUND);
                   // -------------------------------------------------------------------------------------
                   ensure(guard.latchState == LATCH_STATE::EXCLUSIVE);
                   // -------------------------------------------------------------------------------------
-                  if (guard.frame->pVersion != ee.pVersion) {
+                  if (guard.frame->pVersion != ee.pVersion) { // conflict epoch?
                      ensure(guard.frame->latch.isLatched());
                      guard.frame->latch.unlatchExclusive();
                      continue;
@@ -448,8 +452,9 @@ void PageProvider::startThread() {
                   }
                   auto& response = *ctx.outgoingResp.current;
                   // -------------------------------------------------------------------------------------
+                  // Q: in which case needRead is false (shared, evict to ssd and not dirty)
                   if (!needRead) {
-                     ensure(guard.frame->possession == POSSESSION::SHARED);
+                     ensure(guard.frame->possession == POSSESSION::SHARED);   
                      response.add(guard.frame->pid);
                      ensure(guard.frame->latch.isLatched());
                      // check if we can remove the frame
@@ -477,11 +482,13 @@ void PageProvider::startThread() {
                         while (!privatePageBuffer.full())
                            privatePageBuffer.add(bm.pageFreeList.pop(threads::ThreadContext::my().page_handle));
                      }
+                     // wait for the evicting node write to this page
                      guard.frame->page = privatePageBuffer.remove();
                   }
                   guard.frame->state = BF_STATE::HOT;
                   guard.frame->dirty = true;
                   response.add(guard.frame->pid);
+                  // Q: RDMA write put the page into frame
                   ctx.latchedFrames.emplace_back(guard.frame);
                   ctx.rdmaReadBuffer.add(ctx, guard.frame->page, ee.offset);
                   counters.incr(profiling::WorkerCounters::pp_rdma_received);
@@ -587,6 +594,7 @@ void PageProvider::startThread() {
                             // -------------------------------------------------------------------------------------
                             if ((frame.pid.getOwner() == bm.nodeId)) {
                                auto rc = evict_owner_page(frame, epoch);
+                               // dirty and async write buffer is full
                                if (!rc) break;  // encountered dirty page and we cannot write it to the buffer
                                continue;
                             }
@@ -600,6 +608,7 @@ void PageProvider::startThread() {
                                   frame.latch.unlatchExclusive();
                                   break;
                                }
+                               // Q: what's the meaning of this block, why need outgoing
                                ensure(frame.state == BF_STATE::HOT);
                                partition.cctxs[targetNode].outgoing.current->add(
                                    {.pid = frame.pid, .offset = (uintptr_t)(frame.page), .pVersion = frame.pVersion});
